@@ -1,0 +1,19 @@
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aTexCoords;
+
+out vec2 TexCoords;
+
+uniform mat4 u_Projection;
+uniform mat4 u_View;
+
+void main() {
+	TexCoords = aTexCoords;
+	
+	// Calculate position using the modified view matrix
+	vec4 pos = u_Projection * u_View * vec4(aPos, 1.0);
+	
+	// TRICK: Force depth value to 1.0 (the maximum distance)
+	// perspective divide does z / w. Making z equal to w guarantees the output is 1.0
+	gl_Position = pos.xyww;
+}

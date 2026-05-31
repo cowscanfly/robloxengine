@@ -1,0 +1,167 @@
+#include "Instances/Instance.hpp"
+
+#include <stdlib.h>
+#include <stdint.h>
+#include <assert.h>
+#include <new>
+#include "PropertySignalNode.hpp"
+#include "types/FlatMap.hpp"
+#include "types/String.hpp"
+#include "Instances/InstanceUniqueId.hpp"
+
+namespace Engine {
+
+Instance::Instance()
+	: m_name("Instance"), m_unique_id(generateUniqueId()), m_parent(nullptr) {}
+
+Instance::~Instance() {
+	Destroying.Fire(this);
+	if (m_parent) {
+		Instance* temp_parent = m_parent;
+		m_parent = nullptr; 
+		temp_parent->RemoveChild(this);
+	}
+
+	auto it = m_children.GetIterator();
+
+	while (it.step()) {
+		it.value.value->m_parent = nullptr;
+	}
+
+	auto it2 = m_children.GetIterator();
+
+	while (it2.step()) {
+		delete it2.value.value;
+	}
+
+	PropertySignalNode* current = m_propertySignalsHead;
+	while (current != nullptr) {
+		current->signal.~Signal();
+		current = current->next;
+	}
+}
+
+void Instance::SetParent(Instance* new_parent) {
+	if (m_parent == new_parent) return;
+
+	if (m_parent) {
+		m_parent->RemoveChild(this);
+	}
+
+	m_parent = new_parent;
+
+	if (m_parent) {
+		m_parent->AddChild(this);
+	}
+
+	FirePropertyChangedSignal("Parent");
+}
+
+void Instance::AddChild(Instance* child) {
+	m_children.Insert(child->m_unique_id, child);
+
+	ChildAdded.Fire(child);
+
+	for (Instance* ascendant = m_parent; ascendant != nullptr; ascendant = ascendant->m_parent) {
+		ascendant->CascadeDescendantAdded(child);
+	}
+}
+
+void Instance::RemoveChild(Instance* child) {
+	m_children.Erase(child->m_unique_id);
+
+	ChildRemoved.Fire(child);
+
+	for (Instance* ascendant = m_parent; ascendant != nullptr; ascendant = ascendant->m_parent) {
+		ascendant->CascadeDescendantRemoving(child);
+	}
+}
+
+Instance* Instance::FindFirstChild(const char* target_name) {
+	auto it = m_children.GetIterator();
+	while (it.step()) {
+		if (it.value.value->m_name == target_name) {
+			return it.value.value;
+		}
+	}
+	return nullptr;
+}
+
+// for IsA
+
+typedef const void* ClassId;
+
+ClassId Instance::GetClassIdStatic() {
+	static const char id = 0; 
+	return &id;
+}
+
+ClassId Instance::GetClassId() const {
+	return GetClassIdStatic();
+}
+
+bool Instance::IsA(ClassId targetId) const {
+	return GetClassId() == targetId;
+}
+
+Signal* Instance::GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName) {
+	PropertySignalNode* current = m_propertySignalsHead;
+	while (current != nullptr) {
+		if (strcmp(current->propertyName, propertyName) == 0) {
+			return &(current->signal);
+		}
+		current = current->next;
+	}
+
+	PropertySignalNode* newNode = (PropertySignalNode*)allocator.Allocate(sizeof(PropertySignalNode), alignof(PropertySignalNode));
+	new (&newNode->signal) Signal();
+	newNode->propertyName = propertyName;
+	
+	newNode->next = m_propertySignalsHead;
+	m_propertySignalsHead = newNode;
+
+	return &(newNode->signal);
+}
+
+void Instance::FirePropertyChangedSignal(const char* propertyName) {
+	PropertySignalNode* current = m_propertySignalsHead;
+	while (current != nullptr) {
+		if (strcmp(current->propertyName, propertyName) == 0) {
+			current->signal.Fire(nullptr); 
+			return;
+		}
+		current = current->next;
+	}
+}
+
+void Instance::SetName(const char* new_name) {
+	m_name = new_name; 
+	FirePropertyChangedSignal("Name");
+}
+
+const char* Instance::GetClassName() const { return "Instance"; }
+const char* Instance::GetName() const { return m_name.CStr(); }
+uint64_t Instance::GetUniqueID() const { return m_unique_id; }
+Instance* Instance::GetParent() const { return m_parent; }
+const FlatMap<uint64_t, Instance*>& Instance::GetChildren() { return m_children; }
+
+// Recursively walks DOWN a target subtree, triggering the calling ancestor's event at every node
+void Instance::CascadeDescendantAdded(Instance* sub_target) {
+	DescendantAdded.Fire(sub_target);
+
+	auto it = sub_target->m_children.GetIterator();
+	while (it.step()) {
+		CascadeDescendantAdded(it.value.value);
+	}
+}
+
+void Instance::CascadeDescendantRemoving(Instance* sub_target) {
+	DescendantRemoving.Fire(sub_target);
+
+	auto it = sub_target->m_children.GetIterator();
+	while (it.step()) {
+		CascadeDescendantRemoving(it.value.value);
+	}
+}
+
+} // namespace Engine
