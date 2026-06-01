@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include "Iterator.hpp"
 
-constexpr float max_load_factor = 0.7;
+constexpr float max_load_factor = 0.7f;
 constexpr size_t default_inital_capacity = 8;
 
 template <typename K, typename V>
@@ -51,26 +51,8 @@ class FlatMap {
 		inline size_t NextIndex(size_t current_index) {
 			return (current_index + 1) % capacity;
 		}
-		
-	public:
-		FlatMap(size_t inital_capacity = default_inital_capacity) {
-			capacity = inital_capacity;
-			size = 0;
-			table = new Entry[capacity];
-			for (size_t i = 0; i < capacity; i++) {
-				table[i].state = EMPTY;
-			}
-		}
 
-		~FlatMap() {
-			delete[] table;
-		}
-
-		bool Insert(const KeyType& key, const ValueType& value) {
-			if ((float)size / (float)capacity >= max_load_factor) {
-				Resize(capacity * 2);
-			}
-			
+		bool InsertInternal(const KeyType& key, const ValueType& value) {
 			size_t index = Hash(key);
 			size_t first_deleted_index = -1;
 
@@ -95,6 +77,34 @@ class FlatMap {
 
 				index = NextIndex(index);
 			}
+		}
+		
+	public:
+		FlatMap(size_t inital_capacity = default_inital_capacity) {
+			capacity = (inital_capacity == 0) ? default_inital_capacity : inital_capacity;
+			size = 0;
+			table = new Entry[capacity];
+			for (size_t i = 0; i < capacity; i++) {
+				table[i].state = EMPTY;
+			}
+		}
+
+		~FlatMap() {
+			delete[] table;
+		}
+
+		FlatMap(const FlatMap&) = delete;
+		FlatMap& operator=(const FlatMap&) = delete;
+
+		bool Insert(const KeyType& key, const ValueType& value) {
+			if (capacity == 0 || (float)size / (float)capacity >= max_load_factor) {
+				size_t next_capacity = (capacity == 0) ? default_inital_capacity : capacity * 2;
+				if (next_capacity < capacity) {
+					return false;
+				}
+				Resize(next_capacity);
+			}
+			return InsertInternal(key, value);
 		}
 
 		ValueType* Find(const KeyType& key) {
@@ -146,6 +156,19 @@ class FlatMap {
 		}
 
 		void Resize(size_t new_capacity) {
+			if (new_capacity == 0 || new_capacity == (size_t)-1) {
+				new_capacity = default_inital_capacity;
+			}
+
+			size_t max_allowed_capacity = 9223372036854775807ULL / sizeof(Entry);
+			if (new_capacity > max_allowed_capacity) {
+				new_capacity = max_allowed_capacity;
+			}
+
+			if (new_capacity <= capacity) {
+				return;
+			}
+
 			Entry* old_table = table;
 			size_t old_capacity = capacity;
 
@@ -160,14 +183,14 @@ class FlatMap {
 			for (size_t i = 0; i < old_capacity; i++) {
 				Entry& old_entry = old_table[i];
 				if (old_entry.state == OCCUPIED) {
-					Insert(old_entry.key, old_entry.value);
+					InsertInternal(old_entry.key, old_entry.value);
 				}
 			}
 			delete[] old_table;
 		}
 
 		static bool NextItem(void* state, void** current, MapEntry<KeyType, ValueType>& out_value) {
-			FlatMap* map = static_cast<FlatMap*>(state);
+			const FlatMap* map = static_cast<const FlatMap*>(state);
 			
 			size_t index = (size_t)(*current);
 
@@ -184,10 +207,10 @@ class FlatMap {
 			return false;
 		}
 
-		Iterator<MapEntry<KeyType, ValueType>> GetIterator() {
+		Iterator<MapEntry<KeyType, ValueType>> GetIterator() const {
 			return Iterator<MapEntry<KeyType, ValueType>>{ 
 				NextItem, 
-				this, 
+				const_cast<FlatMap*>(this), 
 				(void*)0, 
 				MapEntry<KeyType, ValueType>{ table[0].key, table[0].value } 
 			};

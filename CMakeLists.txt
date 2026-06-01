@@ -27,8 +27,8 @@ else()
 	add_compile_options(-fno-exceptions)
 	
 	if(OPTIMIZE)
-		add_compile_options(-O3 -march=native -flto) # Enable native vectorization and Link Time Optimization
-		add_link_options(-flto)
+		add_compile_options(-O3 -march=native -flto=auto) # Enable native vectorization and Link Time Optimization
+		add_link_options(-flto=auto)
 	else()
 		add_compile_options(-O0 -g)
 	endif()

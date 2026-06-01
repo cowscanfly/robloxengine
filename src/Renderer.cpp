@@ -83,7 +83,7 @@ namespace Renderer {
 		// initalize rendering in workspace data
 		Vector<glm::mat4> modelMatrices;
 		Vector<glm::vec3> partColors;
-		auto workspaceChildren = workspace->GetChildren(); // FlatMap
+		auto& workspaceChildren = workspace->GetChildren(); // FlatMap
 
 		auto it = workspaceChildren.GetIterator();
 		while (it.step()) {
