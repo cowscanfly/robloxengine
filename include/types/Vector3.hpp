@@ -9,11 +9,11 @@ struct Vector3 {
 	Vector3();
 	Vector3(float _x, float _y, float _z);
 
-	bool operator==(const Vector3&) {
-		return ((x == y) == z);
+	bool operator==(const Vector3& other) const {
+		return (x == other.x) && (y == other.y) && (z == other.z);
 	}
-	bool operator!=(const Vector3&) {
-		return !((x == y) == z);
+	bool operator!=(const Vector3& other) const {
+		return !(*this == other);
 	}
 };
 
