@@ -9,6 +9,7 @@
 #include "types/FlatMap.hpp"
 #include "types/String.hpp"
 #include "Instances/InstanceUniqueId.hpp"
+#include <stdio.h>
 
 namespace Engine {
 
@@ -63,7 +64,7 @@ void Instance::AddChild(Instance* child) {
 
 	ChildAdded.Fire(child);
 
-	for (Instance* ascendant = m_parent; ascendant != nullptr; ascendant = ascendant->m_parent) {
+	for (Instance* ascendant = child->m_parent; ascendant != nullptr; ascendant = ascendant->m_parent) {
 		ascendant->CascadeDescendantAdded(child);
 	}
 }
@@ -73,7 +74,7 @@ void Instance::RemoveChild(Instance* child) {
 
 	ChildRemoved.Fire(child);
 
-	for (Instance* ascendant = m_parent; ascendant != nullptr; ascendant = ascendant->m_parent) {
+	for (Instance* ascendant = child->m_parent; ascendant != nullptr; ascendant = ascendant->m_parent) {
 		ascendant->CascadeDescendantRemoving(child);
 	}
 }
