@@ -21,6 +21,78 @@
 #include "types/Color3.hpp"
 #include "types/Vector3.hpp"
 
+void RunEngineTestLoop(Engine::Workspace* Workspace)
+{
+	static uint64_t frameCount = 0;
+	
+	static Engine::BasePart* spawnedParts[100];
+	static const size_t partCount = 100;
+	static const size_t gridSize = 10; // 10x10 = 100 parts
+	static const float spacing = 4.0f; // Space between each part
+
+	uint64_t currentCycleFrame = frameCount % 7000;
+
+	// PART 1: Initialization (Frame 0)
+	if (currentCycleFrame == 0)
+	{
+		for (size_t i = 0; i < partCount; ++i)
+		{
+			spawnedParts[i] = new Engine::BasePart();
+			
+			// Calculate static grid coordinates
+			size_t row = i / gridSize;
+			size_t col = i % gridSize;
+			float posX = col * spacing;
+			float posZ = row * spacing;
+			
+			spawnedParts[i]->SetPosition(Engine::Vector3(posX, 0.0f, posZ));
+			spawnedParts[i]->SetSize(Engine::Vector3(1.5f, 1.5f, 1.5f));
+			
+			spawnedParts[i]->SetParent(Workspace);
+		}
+	}
+
+	// PART 2: Mutation (Frames 1 to 4999 - The first 5 seconds)
+	if (currentCycleFrame > 0 && currentCycleFrame < 5000)
+	{
+		for (size_t i = 0; i < partCount; ++i)
+		{
+			size_t row = i / gridSize;
+			size_t col = i % gridSize;
+			
+			// Animate the size and height based on time
+			float timeOffset = static_cast<float>(currentCycleFrame) * 0.01f;
+			float pulse = sinf(timeOffset + i);
+			
+			float posX = col * spacing;
+			float posY = pulse * 2.0f; // Bob up and down
+			float posZ = row * spacing;
+			
+			spawnedParts[i]->SetPosition(Engine::Vector3(posX, posY, posZ));
+			spawnedParts[i]->SetSize(Engine::Vector3(1.5f + pulse, 1.5f + pulse, 1.5f + pulse));
+		}
+	}
+
+	// PART 3: Destruction (Frame 5000)
+	if (currentCycleFrame == 5000)
+	{
+		for (size_t i = 0; i < partCount; ++i)
+		{
+			if (spawnedParts[i] != nullptr)
+			{
+				spawnedParts[i]->SetParent(nullptr);
+				delete spawnedParts[i];
+				spawnedParts[i] = nullptr;
+			}
+		}
+	}
+
+	// PART 4: Cooldown (Frames 5001 to 6999 - The last 2 seconds)
+	// Engine idles to observe memory drop
+
+	frameCount++;
+}
+
 int main() {
 	Engine::Window mainWindow(800, 600, "tung tung aura");
 	if (!mainWindow.Initialize()) {
@@ -85,13 +157,7 @@ int main() {
 	while (!mainWindow.ShouldClose()) {
 		framespassed+=1;
 
-		if (framespassed % 1000 == 0) {
-			Engine::BasePart* newpart = new Engine::BasePart();
-			newpart->SetSize(Engine::Vector3(3,3,3));
-			newpart->SetPosition(Engine::Vector3((float)framespassed / 1000, 0, 0));
-			newpart->SetColor3(Engine::Color3(1,1,1));
-			newpart->SetParent(workspace);
-		}
+		RunEngineTestLoop(workspace);
 
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
@@ -176,5 +242,6 @@ int main() {
 
 	Engine::Renderer::Shutdown();
 	mainWindow.Close();
+	delete workspace;
 	return 0;
 }
