@@ -9,7 +9,6 @@
 #include "types/FlatMap.hpp"
 #include "types/String.hpp"
 #include "Instances/InstanceUniqueId.hpp"
-#include <stdio.h>
 
 namespace Engine {
 
@@ -18,6 +17,7 @@ Instance::Instance()
 
 Instance::~Instance() {
 	Destroying.Fire(this);
+	
 	if (m_parent) {
 		Instance* temp_parent = m_parent;
 		m_parent = nullptr; 
@@ -25,21 +25,37 @@ Instance::~Instance() {
 	}
 
 	auto it = m_children.GetIterator();
-
 	while (it.step()) {
 		it.value.value->m_parent = nullptr;
 	}
 
-	auto it2 = m_children.GetIterator();
+	size_t childCount = 0;
+	Instance** childArray = new Instance*[m_children.GetSize()]; 
 
+	auto it2 = m_children.GetIterator();
 	while (it2.step()) {
-		delete it2.value.value;
+		childArray[childCount++] = it2.value.value;
 	}
+
+	for (size_t i = 0; i < childCount; ++i) {
+		delete childArray[i];
+	}
+	delete[] childArray;
 
 	PropertySignalNode* current = m_propertySignalsHead;
 	while (current != nullptr) {
+		PropertySignalNode* nextNode = current->next;
 		current->signal.~Signal();
-		current = current->next;
+		Engine::Memory::GetPropertySignalNodeAllocator().deallocate(current);
+		current = nextNode;
+	}
+
+	PropertySignalNode* internalCurrent = m_Internal_propertySignalsHead;
+	while (internalCurrent != nullptr) {
+		PropertySignalNode* nextNode = internalCurrent->next;
+		internalCurrent->signal.~Signal();
+		Engine::Memory::GetPropertySignalNodeAllocator().deallocate(internalCurrent);
+		internalCurrent = nextNode;
 	}
 }
 
