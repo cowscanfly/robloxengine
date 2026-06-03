@@ -114,7 +114,7 @@ Signal* Instance::GetPropertyChangedSignal(const char* propertyName) {
 		current = current->next;
 	}
 
-	PropertySignalNode* newNode = (PropertySignalNode*)Engine::Memory::g_propertySignalNodeAllocator.allocate();
+	PropertySignalNode* newNode = (PropertySignalNode*)Engine::Memory::GetPropertySignalNodeAllocator().allocate();
 	new (&newNode->signal) Signal();
 	newNode->propertyName = propertyName;
 	
@@ -179,7 +179,7 @@ Signal* Instance::Internal_GetPropertyChangedSignal(const char* propertyName) {
 		current = current->next;
 	}
 
-	PropertySignalNode* newNode = (PropertySignalNode*)Engine::Memory::g_propertySignalNodeAllocator.allocate();
+	PropertySignalNode* newNode = (PropertySignalNode*)Engine::Memory::GetPropertySignalNodeAllocator().allocate();
 	new (&newNode->signal) Signal();
 	newNode->propertyName = propertyName;
 	
