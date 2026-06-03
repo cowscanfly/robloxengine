@@ -20,6 +20,7 @@ protected:
 	FlatMap<uint64_t, Instance*> m_children;
 
 	PropertySignalNode* m_propertySignalsHead = nullptr;
+	PropertySignalNode* m_Internal_propertySignalsHead = nullptr;
 	void FirePropertyChangedSignal(const char* propertyName);
 
 	void RemoveChild(Instance* child); 
@@ -31,6 +32,9 @@ public:
 	Signal DescendantRemoving;
 	Signal Destroying;
 	Signal* GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName); 
+
+	// Internal variants pass 'this' as an argument to safely decouple C++ backend systems (like the Renderer) from public 0-argument game scripts.
+	Signal* Internal_GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName);
 
 	Instance();
 	virtual ~Instance(); 
@@ -51,6 +55,7 @@ public:
 	Instance* GetParent() const;
 	const FlatMap<uint64_t, Instance*>& GetChildren();
 private:
+	void Internal_FirePropertyChangedSignal(const char* propertyName);
 	void CascadeDescendantAdded(Instance* child);
 	void CascadeDescendantRemoving(Instance* child);
 };

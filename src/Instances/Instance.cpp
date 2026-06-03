@@ -124,6 +124,9 @@ Signal* Instance::GetPropertyChangedSignal(BumpAllocator& allocator, const char*
 }
 
 void Instance::FirePropertyChangedSignal(const char* propertyName) {
+
+	Internal_FirePropertyChangedSignal(propertyName);
+
 	PropertySignalNode* current = m_propertySignalsHead;
 	while (current != nullptr) {
 		if (strcmp(current->propertyName, propertyName) == 0) {
@@ -161,6 +164,38 @@ void Instance::CascadeDescendantRemoving(Instance* sub_target) {
 	auto it = sub_target->m_children.GetIterator();
 	while (it.step()) {
 		CascadeDescendantRemoving(it.value.value);
+	}
+}
+
+// Internal variants pass 'this' as an argument to safely decouple C++ backend systems (like the Renderer) from public 0-argument game scripts.
+
+Signal* Instance::Internal_GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName) {
+	PropertySignalNode* current = m_Internal_propertySignalsHead;
+	while (current != nullptr) {
+		if (strcmp(current->propertyName, propertyName) == 0) {
+			return &(current->signal);
+		}
+		current = current->next;
+	}
+
+	PropertySignalNode* newNode = (PropertySignalNode*)allocator.Allocate(sizeof(PropertySignalNode), alignof(PropertySignalNode));
+	new (&newNode->signal) Signal();
+	newNode->propertyName = propertyName;
+	
+	newNode->next = m_Internal_propertySignalsHead;
+	m_Internal_propertySignalsHead = newNode;
+
+	return &(newNode->signal);
+}
+
+void Instance::Internal_FirePropertyChangedSignal(const char* propertyName) {
+	PropertySignalNode* current = m_Internal_propertySignalsHead;
+	while (current != nullptr) {
+		if (strcmp(current->propertyName, propertyName) == 0) {
+			current->signal.Fire(this); 
+			return;
+		}
+		current = current->next;
 	}
 }
 
