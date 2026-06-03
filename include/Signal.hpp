@@ -19,6 +19,8 @@ private:
 public:
 	Signal() = default;
 
+	using Allocator = PoolAllocator<Connection>;
+
 	void Connect(PoolAllocator<Connection>& allocator, void* instance, EventCallback callback) {
 		Connection* newConn = (Connection*)allocator.allocate();
 		newConn->instance = instance;
