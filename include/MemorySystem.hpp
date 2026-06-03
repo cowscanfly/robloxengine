@@ -6,8 +6,22 @@
 namespace Engine {
 namespace Memory {
 
-inline Signal::Allocator g_signalAllocator;
-inline PoolAllocator<PropertySignalNode> g_propertySignalNodeAllocator;
+namespace {
+	inline Signal::Allocator* signalAllocator = nullptr;
+	inline PoolAllocator<PropertySignalNode> propertySignalNodeAllocator;
+}
+
+inline void Initialize(Signal::Allocator* _signalAllocator) {
+	signalAllocator = _signalAllocator;
+}
+
+inline Signal::Allocator& GetSignalAllocator() {
+	return *signalAllocator;
+}
+
+inline PoolAllocator<PropertySignalNode>& GetPropertySignalNodeAllocator() {
+	return propertySignalNodeAllocator;
+}
 
 } // namespace Memory
 } // namespace Engine
