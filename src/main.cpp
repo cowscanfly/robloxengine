@@ -1,3 +1,4 @@
+#include <cmath>
 #include <glm/common.hpp>
 #include <stdio.h>
 #include <glad/glad.h>
@@ -6,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <math.h>
 
 #include "Window.hpp"
 #include "Camera.hpp"
@@ -32,6 +34,11 @@ int main() {
 
 	Engine::Camera camera(glm::vec3(3.0f, 4.0f, 5.0f), glm::vec3(0.0f, 1.0f, 0.0f), -125.0f, -30.0f);
 	Engine::Workspace* workspace = new Engine::Workspace();
+	Engine::BasePart& theSpinningCube = *(new Engine::BasePart());
+	theSpinningCube.SetPosition(Engine::Vector3(0,0,0));
+	theSpinningCube.SetSize(Engine::Vector3(30,30,30));
+	theSpinningCube.SetColor3(Engine::Color3(0,0,0));
+	theSpinningCube.SetParent(workspace);
 	for (int i = 0; i < PART_COUNT; i++) {
 		RobloxPart part = ROBLOX_PARTS[i];
 		Engine::BasePart& newPart = *(new Engine::BasePart());
@@ -81,6 +88,28 @@ int main() {
 		lastFrame = currentFrame;
 
 		mainWindow.PollEvents();
+
+		// spinning cube
+		float accumulatedTime = static_cast<float>(glfwGetTime());
+		float cosVal = std::cos(accumulatedTime);
+		float sinVal = std::sin(accumulatedTime);
+
+		Engine::Vector3 startPos(0.0f, 5.0f, 0.0f);
+		Engine::Vector3 newPos(cosVal * 5.0f + startPos.x, startPos.y, startPos.z);
+
+		float rotationSpeed = 2.0f;
+		float currentAngle = accumulatedTime * rotationSpeed;
+
+		Engine::CFrame combinedCFrame = Engine::CFrame(newPos) * Engine::CFrame::Angles(0.0f, currentAngle, 0.0f);
+		theSpinningCube.SetCFrame(combinedCFrame);
+
+		float scale = 20.0f + 10.0f * sinVal;
+		theSpinningCube.SetSize(Engine::Vector3(scale, scale, scale));
+
+		float r = (sinVal + 1.0f) * 0.5f;
+		float g = (cosVal + 1.0f) * 0.5f;
+		float b = 1.0f - r;
+		theSpinningCube.SetColor3(Engine::Color3(r, g, b));
 
 		// --- Process Keyboard Inputs ---
 		glm::vec3 directionDelta(0.0f);
