@@ -3,9 +3,9 @@
 
 namespace Engine {
 
-// The static callback function pointer layout
 typedef void (*EventCallback)(void* instance, void* payload);
 
+// TODO: use a map
 class Signal {
 private:
 	struct Connection {
@@ -27,7 +27,26 @@ public:
 		m_head = newConn;
 	}
 
-	// We pass a generic payload pointer along when firing the event
+	void Disconnect(PoolAllocator<Connection>& allocator, void* instance, EventCallback callback) {
+		Connection* current = m_head;
+		Connection* previous = nullptr;
+
+		while (current != nullptr) {
+			if (current->instance == instance && current->callback == callback) {
+				if (previous == nullptr) {
+					m_head = current->next;
+				} else {
+					previous->next = current->next;
+				}
+				
+				allocator.deallocate(current);
+				// keep looping to find duplicates
+			}
+			previous = current;
+			current = current->next;
+		}
+	}
+
 	void Fire(void* payload = nullptr) {
 		Connection* current = m_head;
 		while (current != nullptr) {
