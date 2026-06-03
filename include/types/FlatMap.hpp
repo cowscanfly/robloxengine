@@ -54,6 +54,7 @@ class FlatMap {
 
 		bool InsertInternal(const KeyType& key, const ValueType& value) {
 			size_t index = Hash(key);
+			size_t start_index = index;
 			size_t first_deleted_index = -1;
 
 			while (1) {
@@ -76,6 +77,17 @@ class FlatMap {
 				}
 
 				index = NextIndex(index);
+
+				if (index == start_index) {
+					if (first_deleted_index != -1) {
+						table[first_deleted_index].key = key;
+						table[first_deleted_index].value = value;
+						table[first_deleted_index].state = OCCUPIED;
+						size++;
+						return true;
+					}
+					return false;
+				}
 			}
 		}
 		
