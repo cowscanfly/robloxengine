@@ -96,6 +96,9 @@ class FlatMap {
 		FlatMap(const FlatMap&) = delete;
 		FlatMap& operator=(const FlatMap&) = delete;
 
+		size_t GetSize() const { return size; }
+		size_t GetCapacity() const { return capacity; }
+
 		bool Insert(const KeyType& key, const ValueType& value) {
 			if (capacity == 0 || (float)size / (float)capacity >= max_load_factor) {
 				size_t next_capacity = (capacity == 0) ? default_inital_capacity : capacity * 2;
