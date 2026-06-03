@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <new>
+#include "MemorySystem.hpp"
 #include "PropertySignalNode.hpp"
 #include "types/FlatMap.hpp"
 #include "types/String.hpp"
@@ -104,7 +105,7 @@ bool Instance::IsA(ClassId targetId) const {
 	return GetClassId() == targetId;
 }
 
-Signal* Instance::GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName) {
+Signal* Instance::GetPropertyChangedSignal(const char* propertyName) {
 	PropertySignalNode* current = m_propertySignalsHead;
 	while (current != nullptr) {
 		if (strcmp(current->propertyName, propertyName) == 0) {
@@ -113,7 +114,7 @@ Signal* Instance::GetPropertyChangedSignal(BumpAllocator& allocator, const char*
 		current = current->next;
 	}
 
-	PropertySignalNode* newNode = (PropertySignalNode*)allocator.Allocate(sizeof(PropertySignalNode), alignof(PropertySignalNode));
+	PropertySignalNode* newNode = (PropertySignalNode*)Engine::Memory::g_propertySignalNodeAllocator.allocate();
 	new (&newNode->signal) Signal();
 	newNode->propertyName = propertyName;
 	
@@ -169,7 +170,7 @@ void Instance::CascadeDescendantRemoving(Instance* sub_target) {
 
 // Internal variants pass 'this' as an argument to safely decouple C++ backend systems (like the Renderer) from public 0-argument game scripts.
 
-Signal* Instance::Internal_GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName) {
+Signal* Instance::Internal_GetPropertyChangedSignal(const char* propertyName) {
 	PropertySignalNode* current = m_Internal_propertySignalsHead;
 	while (current != nullptr) {
 		if (strcmp(current->propertyName, propertyName) == 0) {
@@ -178,7 +179,7 @@ Signal* Instance::Internal_GetPropertyChangedSignal(BumpAllocator& allocator, co
 		current = current->next;
 	}
 
-	PropertySignalNode* newNode = (PropertySignalNode*)allocator.Allocate(sizeof(PropertySignalNode), alignof(PropertySignalNode));
+	PropertySignalNode* newNode = (PropertySignalNode*)Engine::Memory::g_propertySignalNodeAllocator.allocate();
 	new (&newNode->signal) Signal();
 	newNode->propertyName = propertyName;
 	

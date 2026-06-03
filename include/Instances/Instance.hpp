@@ -6,8 +6,8 @@
 #include "types/String.hpp"
 #include "Signal.hpp"
 #include "PropertySignalNode.hpp"
-#include "BumpAllocator.hpp"
 #include "types/FlatMap.hpp"
+#include "MemorySystem.hpp"
 
 namespace Engine {
 
@@ -31,10 +31,10 @@ public:
 	Signal DescendantAdded;
 	Signal DescendantRemoving;
 	Signal Destroying;
-	Signal* GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName); 
+	Signal* GetPropertyChangedSignal(const char* propertyName); 
 
 	// Internal variants pass 'this' as an argument to safely decouple C++ backend systems (like the Renderer) from public 0-argument game scripts.
-	Signal* Internal_GetPropertyChangedSignal(BumpAllocator& allocator, const char* propertyName);
+	Signal* Internal_GetPropertyChangedSignal(const char* propertyName);
 
 	Instance();
 	virtual ~Instance(); 
