@@ -46,6 +46,7 @@ void ResizeInstanceVBO(GLuint& vboID, size_t newCapacity, size_t elementSize, co
 	GLuint newVBO;
 	glGenBuffers(1, &newVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, newVBO);
+
 	glBufferData(GL_ARRAY_BUFFER, newCapacity * elementSize, nullptr, GL_DYNAMIC_DRAW);
 
 	if (currentData && currentSize > 0) {
@@ -123,6 +124,8 @@ namespace Renderer {
 		free((void*)skyboxFSSource);
 
 		// initalize rendering in workspace data
+		workspace->DescendantAdded.Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnDescendentAdded);
+		workspace->DescendantRemoving.Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnDescendentRemoving);
 		auto& workspaceChildren = workspace->GetChildren(); // FlatMap
 
 		size_t currentIndex = 0;
@@ -344,13 +347,47 @@ namespace Renderer {
 				ResizeInstanceVBO(modelMatrixVBO_ID, newCapacity, sizeof(glm::mat4), modelMatricesVBO.Data(), index);
 				ResizeInstanceVBO(colorsVBO_ID, newCapacity, sizeof(glm::vec3), colorsVBO.Data(), index);
 				vboCapacity = newCapacity;
+
+				GLuint cubeMeshVAO = g_cubeMesh.GetVAO();
+				glBindVertexArray(cubeMeshVAO);
+
+				glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
+				GLuint matrixStartLocation = 2;
+				for (unsigned int i = 0; i < 4; i++) {
+					unsigned int attributeLocation = matrixStartLocation + i;
+					glEnableVertexAttribArray(attributeLocation);
+					glVertexAttribPointer(
+						attributeLocation, 
+						4, 
+						GL_FLOAT, 
+						GL_FALSE, 
+						sizeof(glm::mat4), 
+						(void*)(i * sizeof(glm::vec4))
+					);
+					glVertexAttribDivisor(attributeLocation, 1); 
+				}
+
+				glBindBuffer(GL_ARRAY_BUFFER, colorsVBO_ID);
+				unsigned int colorLocation = 6; 
+				glEnableVertexAttribArray(colorLocation);
+				glVertexAttribPointer(
+					colorLocation, 
+					3, 
+					GL_FLOAT, 
+					GL_FALSE, 
+					sizeof(glm::vec3), 
+					(void*)0
+				);
+				glVertexAttribDivisor(colorLocation, 1);
+
+				glBindVertexArray(0);
+			} else {
+				glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
+				glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::mat4), sizeof(glm::mat4), &modelMatricesVBO[index]);
+
+				glBindBuffer(GL_ARRAY_BUFFER, colorsVBO_ID);
+				glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::vec3), sizeof(glm::vec3), &colorsVBO[index]);
 			}
-
-			glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
-			glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::mat4), sizeof(glm::mat4), &modelMatricesVBO[index]);
-
-			glBindBuffer(GL_ARRAY_BUFFER, colorsVBO_ID);
-			glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::vec3), sizeof(glm::vec3), &colorsVBO[index]);
 
 			part->Internal_GetPropertyChangedSignal("Color")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnColorChanged);
 			part->Internal_GetPropertyChangedSignal("CFrame")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnCFrameChanged);
@@ -362,6 +399,9 @@ namespace Renderer {
 
 		void OnDescendentRemoving(void* instance, void* payload) {
 			auto* part = static_cast<BasePart*>(payload);
+			if (!part->IsA(BasePart::GetClassIdStatic())) return;
+
+
 			size_t* partIndex = rendererparts.Find(part);
 			if (!partIndex) return;
 
@@ -380,6 +420,7 @@ namespace Renderer {
 					modelMatricesVBO[removeIndex] = modelMatricesVBO[lastIndex];
 					colorsVBO[removeIndex] = colorsVBO[lastIndex];
 
+					// --- CRITICAL FIX: Upload the moved item's data to the GPU ---
 					glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
 					glBufferSubData(GL_ARRAY_BUFFER, removeIndex * sizeof(glm::mat4), sizeof(glm::mat4), &modelMatricesVBO[removeIndex]);
 
@@ -391,11 +432,14 @@ namespace Renderer {
 				}
 			}
 
+			// Pop the elements off the CPU vectors
 			modelMatricesVBO.Pop();
 			colorsVBO.Pop();
 
+			// Clean up tracking maps
 			rendererparts.Erase(part);
 			partsByIndex.Erase(lastIndex);
+			partsByIndex.Erase(removeIndex); // Also erase the old slot from partsByIndex to prevent loose keys
 		}
 	}
 
