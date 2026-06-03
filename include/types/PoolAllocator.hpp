@@ -6,7 +6,7 @@
 template <typename T>
 class PoolAllocator {
 public:
-	PoolAllocator(size_t blockCount) :
+	PoolAllocator(size_t blockCount = 8) :
 		m_blockCount(blockCount),
 		m_storage(nullptr),
 		m_freeList(nullptr)
