@@ -1,5 +1,5 @@
 #pragma once
-#include "BumpAllocator.hpp"
+#include "types/PoolAllocator.hpp"
 
 namespace Engine {
 
@@ -19,8 +19,8 @@ private:
 public:
 	Signal() = default;
 
-	void Connect(class BumpAllocator& allocator, void* instance, EventCallback callback) {
-		Connection* newConn = (Connection*)allocator.Allocate(sizeof(Connection), alignof(Connection));
+	void Connect(PoolAllocator<Connection>& allocator, void* instance, EventCallback callback) {
+		Connection* newConn = (Connection*)allocator.allocate();
 		newConn->instance = instance;
 		newConn->callback = callback;
 		newConn->next = m_head;
