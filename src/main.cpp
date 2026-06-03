@@ -1,3 +1,4 @@
+#include <glm/common.hpp>
 #include <stdio.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -10,6 +11,8 @@
 #include "Camera.hpp"
 #include "Input.hpp"
 #include "Renderer.hpp"
+#include "MemorySystem.hpp"
+#include "Signal.hpp"
 #include "Instances/Workspace.hpp"
 #include "Instances/BasePart.hpp"
 #include "roblox_parts.hpp"
@@ -24,6 +27,8 @@ int main() {
 	}
 
 	Engine::Input::Initialize(&mainWindow);
+	Engine::Signal::Allocator* signalAllocator = new Engine::Signal::Allocator;
+	Engine::Memory::Initialize(signalAllocator);
 
 	Engine::Camera camera(glm::vec3(3.0f, 4.0f, 5.0f), glm::vec3(0.0f, 1.0f, 0.0f), -125.0f, -30.0f);
 	Engine::Workspace* workspace = new Engine::Workspace();
