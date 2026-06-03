@@ -1,4 +1,3 @@
-#include <cmath>
 #include <glm/common.hpp>
 #include <stdio.h>
 #include <glad/glad.h>
@@ -38,7 +37,7 @@ int main() {
 	theSpinningCube.SetPosition(Engine::Vector3(0,0,0));
 	theSpinningCube.SetSize(Engine::Vector3(30,30,30));
 	theSpinningCube.SetColor3(Engine::Color3(0,0,0));
-	theSpinningCube.SetParent(workspace);
+	// theSpinningCube.SetParent(workspace);
 	for (int i = 0; i < PART_COUNT; i++) {
 		RobloxPart part = ROBLOX_PARTS[i];
 		Engine::BasePart& newPart = *(new Engine::BasePart());
@@ -82,7 +81,18 @@ int main() {
 
 	glfwSetInputMode(mainWindow.GetNativeWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
+	size_t framespassed = 0;
 	while (!mainWindow.ShouldClose()) {
+		framespassed+=1;
+
+		if (framespassed % 1000 == 0) {
+			Engine::BasePart* newpart = new Engine::BasePart();
+			newpart->SetSize(Engine::Vector3(3,3,3));
+			newpart->SetPosition(Engine::Vector3((float)framespassed / 1000, 0, 0));
+			newpart->SetColor3(Engine::Color3(1,1,1));
+			newpart->SetParent(workspace);
+		}
+
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
@@ -91,8 +101,8 @@ int main() {
 
 		// spinning cube
 		float accumulatedTime = static_cast<float>(glfwGetTime());
-		float cosVal = std::cos(accumulatedTime);
-		float sinVal = std::sin(accumulatedTime);
+		float cosVal = cos(accumulatedTime);
+		float sinVal = sin(accumulatedTime);
 
 		Engine::Vector3 startPos(0.0f, 5.0f, 0.0f);
 		Engine::Vector3 newPos(cosVal * 5.0f + startPos.x, startPos.y, startPos.z);
@@ -127,6 +137,7 @@ int main() {
 			directionDelta += camera.GetRightVector();
 		}
 
+
 		// Normalize the vector so diagonal movement isn't twice as fast
 		if (glm::length(directionDelta) > 0.0f) {
 			directionDelta = glm::normalize(directionDelta);
@@ -156,6 +167,9 @@ int main() {
 
 		Engine::Renderer::SetCamera(camera.GetViewMatrix(), camera.GetProjectionMatrix(mainWindow.GetAspectRatio()), camera.GetPosition());
 		Engine::Renderer::Render();
+
+		
+		theSpinningCube.SetParent(workspace);
 
 		mainWindow.SwapBuffers();
 	}
