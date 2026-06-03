@@ -13,10 +13,13 @@
 #include "Mesh.hpp"
 #include "Filesystem.hpp"
 #include "CubeData.hpp"
+#include "Signal.hpp"
 #include "Texture.hpp"
 #include "skyboxCross.hpp"
 #include "types/Vector.hpp"
 #include "types/Vector3.hpp"
+#include "Signal.hpp"
+#include "MemorySystem.hpp"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -39,9 +42,33 @@ static glm::vec3 GetSunDirection(float clockTime, float geographicLatitude) {
 	return glm::normalize(sunDirection);
 }
 
+void ResizeInstanceVBO(GLuint& vboID, size_t newCapacity, size_t elementSize, const void* currentData, size_t currentSize) {
+	GLuint newVBO;
+	glGenBuffers(1, &newVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, newVBO);
+	glBufferData(GL_ARRAY_BUFFER, newCapacity * elementSize, nullptr, GL_DYNAMIC_DRAW);
+
+	if (currentData && currentSize > 0) {
+		glBufferSubData(GL_ARRAY_BUFFER, 0, currentSize * elementSize, currentData);
+	}
+
+	glDeleteBuffers(1, &vboID);
+	vboID = newVBO;
+}
+
+// events
+
+void OnCFrameChanged(void* instance, void* payload);
+void OnSizeChanged(void* instance, void* payload);
+void OnColorChanged(void* instance, void* payload);
+void OnDescendentAdded(void* instance, void* payload);
+void OnDescendentRemoving(void* instance, void* payload);
+
+
 
 namespace Engine {
 namespace Renderer {
+	// properties
 	namespace {
 		Shader g_shader;
 		Shader g_skyboxShader;
@@ -50,16 +77,31 @@ namespace Renderer {
 		Mesh g_skyboxMesh;
 		Texture g_skyboxTexture;
 		
-		size_t instanceCount;
-
 		glm::mat4 g_cachedView = glm::mat4(1.0f);
 		glm::mat4 g_cachedProjection = glm::mat4(1.0f);
 		glm::vec3 g_cachedViewPos = glm::vec3(1.0f);
 		glm::vec3 sunDir = GetSunDirection(14.0f, 41.733f);
 
+		FlatMap<BasePart*, size_t> rendererparts;
+		FlatMap<size_t, BasePart*> partsByIndex;
+		Vector<glm::mat4> modelMatricesVBO;
+		Vector<glm::vec3> colorsVBO;
+
+		GLuint modelMatrixVBO_ID = 0;
+		GLuint colorsVBO_ID = 0;
+		size_t vboCapacity = 0;
+
 		bool g_isInitalized = false;
 	}
 
+	// events
+	namespace {
+		void OnCFrameChanged(void* instance, void* payload);
+		void OnSizeChanged(void* instance, void* payload);
+		void OnColorChanged(void* instance, void* payload);
+		void OnDescendentAdded(void* instance, void* payload);
+		void OnDescendentRemoving(void* instance, void* payload);
+	}
 
 	void Initialize(Workspace* workspace) {
 		const char* vertexSource = Engine::fs::readFile("../shaders/shader.vs");
@@ -81,23 +123,31 @@ namespace Renderer {
 		free((void*)skyboxFSSource);
 
 		// initalize rendering in workspace data
-		Vector<glm::mat4> modelMatrices;
-		Vector<glm::vec3> partColors;
 		auto& workspaceChildren = workspace->GetChildren(); // FlatMap
 
+		size_t currentIndex = 0;
 		auto it = workspaceChildren.GetIterator();
 		while (it.step()) {
 			if (it.value.value->IsA(BasePart::GetClassIdStatic())) {
-				BasePart& processingPart = *static_cast<BasePart*>(it.value.value);
-				Vector3 partSize = processingPart.GetSize();
-				glm::mat4 model = glm::scale(processingPart.GetCFrame().matrix, glm::vec3(partSize.x, partSize.y, partSize.z));
+				BasePart* processingPart = static_cast<BasePart*>(it.value.value);
+				Vector3 partSize = processingPart->GetSize();
+				glm::mat4 model = glm::scale(processingPart->GetCFrame().matrix, glm::vec3(partSize.x, partSize.y, partSize.z));
 
-				modelMatrices.PushBack(model);
-				Color3 partColor = processingPart.GetColor3();
-				partColors.PushBack(glm::vec3(partColor.R, partColor.G, partColor.B));
-				instanceCount++;
+				modelMatricesVBO.PushBack(model);
+				Color3 partColor = processingPart->GetColor3();
+				colorsVBO.PushBack(glm::vec3(partColor.R, partColor.G, partColor.B));
+
+				processingPart->Internal_GetPropertyChangedSignal("Color")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnColorChanged);
+				processingPart->Internal_GetPropertyChangedSignal("CFrame")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnCFrameChanged);
+				processingPart->Internal_GetPropertyChangedSignal("Size")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnSizeChanged);
+
+				rendererparts.Insert(processingPart, currentIndex);
+				partsByIndex.Insert(currentIndex, processingPart);
+				currentIndex++;
 			}
 		}
+
+		vboCapacity = modelMatricesVBO.Size();
 		// initalize mesh for a block
 
 		g_cubeMesh.Initalize(cubeVertices, sizeof(cubeVertices), cubeIndices, sizeof(cubeIndices), GL_STATIC_DRAW);
@@ -119,10 +169,9 @@ namespace Renderer {
 		glEnableVertexAttribArray(1);
 
 		// initalize instance vbos
-		GLuint instanceModelVBO;
-		glGenBuffers(1, &instanceModelVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, instanceModelVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * modelMatrices.Size(), modelMatrices.Data(), GL_STATIC_DRAW);
+		glGenBuffers(1, &modelMatrixVBO_ID);
+		glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * modelMatricesVBO.Size(), modelMatricesVBO.Data(), GL_DYNAMIC_DRAW);
 		GLuint matrixStartLocation = 2;
 
 		for (unsigned int i = 0; i < 4; i++) {
@@ -141,10 +190,9 @@ namespace Renderer {
 			glVertexAttribDivisor(attributeLocation, 1); 
 		}
 
-		GLuint instanceColorVBO;
-		glGenBuffers(1, &instanceColorVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, instanceColorVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * partColors.Size(), partColors.Data(), GL_STATIC_DRAW);
+		glGenBuffers(1, &colorsVBO_ID);
+		glBindBuffer(GL_ARRAY_BUFFER, colorsVBO_ID);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * colorsVBO.Size(), colorsVBO.Data(), GL_DYNAMIC_DRAW);
 
 		unsigned int colorLocation = 6; 
 		glEnableVertexAttribArray(colorLocation);
@@ -232,7 +280,7 @@ namespace Renderer {
 		g_shader.SetVec3("viewPos", g_cachedViewPos);
 
 		glBindVertexArray(g_cubeMesh.GetVAO());
-		glDrawElementsInstanced(GL_TRIANGLES, g_cubeMesh.GetIndexCount(), GL_UNSIGNED_INT, 0, instanceCount);
+		glDrawElementsInstanced(GL_TRIANGLES, g_cubeMesh.GetIndexCount(), GL_UNSIGNED_INT, 0, modelMatricesVBO.Size());
 		
 		glBindVertexArray(0);
 	}
@@ -244,6 +292,112 @@ namespace Renderer {
 		g_cachedViewPos = viewPos;
 	}
 
+	// event function definitions
+	namespace {
+		void OnCFrameChanged(void* instance, void* payload) {
+			auto* part = static_cast<BasePart*>(payload);
+			size_t* partIndex = rendererparts.Find(part);
+			if (!partIndex) return;
+
+			size_t index = *partIndex;
+			Vector3 partSize = part->GetSize();
+			glm::mat4 model = glm::scale(part->GetCFrame().matrix, glm::vec3(partSize.x, partSize.y, partSize.z));
+			
+			modelMatricesVBO[index] = model;
+
+			glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
+			glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::mat4), sizeof(glm::mat4), &modelMatricesVBO[index]);
+		}
+
+		void OnSizeChanged(void* instance, void* payload) {
+			OnCFrameChanged(instance, payload);
+		}
+
+		void OnColorChanged(void* instance, void* payload) {
+			auto* part = static_cast<BasePart*>(payload);
+			size_t* partIndex = rendererparts.Find(part);
+			if (!partIndex) return;
+
+			size_t index = *partIndex;
+			Color3 partColor = part->GetColor3();
+			colorsVBO[index] = glm::vec3(partColor.R, partColor.G, partColor.B);
+
+			glBindBuffer(GL_ARRAY_BUFFER, colorsVBO_ID);
+			glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::vec3), sizeof(glm::vec3), &colorsVBO[index]);
+		}
+
+		void OnDescendentAdded(void* instance, void* payload) {
+			auto* part = static_cast<BasePart*>(payload);
+			if (!part->IsA(BasePart::GetClassIdStatic())) return;
+
+			size_t index = modelMatricesVBO.Size();
+
+			Vector3 partSize = part->GetSize();
+			glm::mat4 model = glm::scale(part->GetCFrame().matrix, glm::vec3(partSize.x, partSize.y, partSize.z));
+			Color3 partColor = part->GetColor3();
+
+			modelMatricesVBO.PushBack(model);
+			colorsVBO.PushBack(glm::vec3(partColor.R, partColor.G, partColor.B));
+
+			if (modelMatricesVBO.Size() > vboCapacity) {
+				size_t newCapacity = vboCapacity == 0 ? 16 : vboCapacity * 2;
+				ResizeInstanceVBO(modelMatrixVBO_ID, newCapacity, sizeof(glm::mat4), modelMatricesVBO.Data(), index);
+				ResizeInstanceVBO(colorsVBO_ID, newCapacity, sizeof(glm::vec3), colorsVBO.Data(), index);
+				vboCapacity = newCapacity;
+			}
+
+			glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
+			glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::mat4), sizeof(glm::mat4), &modelMatricesVBO[index]);
+
+			glBindBuffer(GL_ARRAY_BUFFER, colorsVBO_ID);
+			glBufferSubData(GL_ARRAY_BUFFER, index * sizeof(glm::vec3), sizeof(glm::vec3), &colorsVBO[index]);
+
+			part->Internal_GetPropertyChangedSignal("Color")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnColorChanged);
+			part->Internal_GetPropertyChangedSignal("CFrame")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnCFrameChanged);
+			part->Internal_GetPropertyChangedSignal("Size")->Connect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnSizeChanged);
+
+			rendererparts.Insert(part, index);
+			partsByIndex.Insert(index, part);
+		}
+
+		void OnDescendentRemoving(void* instance, void* payload) {
+			auto* part = static_cast<BasePart*>(payload);
+			size_t* partIndex = rendererparts.Find(part);
+			if (!partIndex) return;
+
+			size_t removeIndex = *partIndex;
+
+			part->Internal_GetPropertyChangedSignal("Color")->Disconnect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnColorChanged);
+			part->Internal_GetPropertyChangedSignal("CFrame")->Disconnect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnCFrameChanged);
+			part->Internal_GetPropertyChangedSignal("Size")->Disconnect(Memory::GetSignalAllocator(), nullptr, &Renderer::OnSizeChanged);
+
+			size_t lastIndex = modelMatricesVBO.Size() - 1;
+			if (removeIndex != lastIndex) {
+				BasePart** lastPartPtr = partsByIndex.Find(lastIndex);
+				if (lastPartPtr) {
+					BasePart* lastPart = *lastPartPtr;
+
+					modelMatricesVBO[removeIndex] = modelMatricesVBO[lastIndex];
+					colorsVBO[removeIndex] = colorsVBO[lastIndex];
+
+					glBindBuffer(GL_ARRAY_BUFFER, modelMatrixVBO_ID);
+					glBufferSubData(GL_ARRAY_BUFFER, removeIndex * sizeof(glm::mat4), sizeof(glm::mat4), &modelMatricesVBO[removeIndex]);
+
+					glBindBuffer(GL_ARRAY_BUFFER, colorsVBO_ID);
+					glBufferSubData(GL_ARRAY_BUFFER, removeIndex * sizeof(glm::vec3), sizeof(glm::vec3), &colorsVBO[removeIndex]);
+
+					rendererparts.Insert(lastPart, removeIndex);
+					partsByIndex.Insert(removeIndex, lastPart);
+				}
+			}
+
+			modelMatricesVBO.Pop();
+			colorsVBO.Pop();
+
+			rendererparts.Erase(part);
+			partsByIndex.Erase(lastIndex);
+		}
+	}
 
 } // namespace Renderer
 } // namespace Engine
