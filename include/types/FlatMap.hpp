@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <stdint.h>
 #include <stddef.h>
 #include "Iterator.hpp"
@@ -28,23 +29,19 @@ class FlatMap {
 		size_t capacity;
 		size_t size;
 
-		inline uint32_t CalculateHash(const KeyType& key) {
-			const uint8_t* bytes = (const uint8_t*)(&key);
-			uint32_t length = sizeof(KeyType);
-			
-			uint32_t hash = 5381;
-
-			for (uint32_t i = 0; i < length; ++i)
-			{
-				hash = ((hash << 5) + hash) + bytes[i];
-			}
-
-			hash ^= (hash >> 16);
-			
-			return hash;
+		inline uint64_t CalculateHash(const KeyType& _key) {
+			uint64_t key = reinterpret_cast<uint64_t>(_key);
+			key = (~key) + (key << 21); // key = (key << 21) - key - 1;
+			key = key ^ (key >> 24);
+			key = (key + (key << 3)) + (key << 8); // key * 265
+			key = key ^ (key >> 14);
+			key = (key + (key << 2)) + (key << 4); // key * 21
+			key = key ^ (key >> 28);
+			key = key + (key << 31);
+			return key;
 		}
 
-		inline uint32_t Hash(const KeyType& key) {
+		inline uint64_t Hash(const KeyType& key) {
 			return CalculateHash(key) % capacity;
 		}
 		
